@@ -1,0 +1,18 @@
+{
+  "species": [
+    {
+      "label": "Red-snapper",
+      "norwegianName": "Rød snapper",
+      "englishName": "Red Snapper",
+      "scientificName": "Lutjanus campechanus",
+      "description": "Rød snapper er en rovfisk med fast, hvitt kjøtt. Den finnes ikke naturlig i norske farvann, men kan dukke opp i handel eller på bilder.",
+      "habitat": "Tropiske og subtropiske havområder (vestlige Atlanterhavet)",
+      "averageSize": "50–100 cm",
+      "characteristics": [
+        "Rødlig kroppsfarge",
+        "Skrånende panne",
+        "Kraftige tenner"
+      ]
+    }
+  ]
+}

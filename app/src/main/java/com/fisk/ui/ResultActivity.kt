@@ -7,6 +7,7 @@ import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import com.fisk.data.FishDatabase
 import com.fisk.databinding.ActivityResultBinding
+import com.fisk.util.MetadataManager
 
 class ResultActivity : AppCompatActivity() {
     
@@ -56,8 +57,8 @@ class ResultActivity : AppCompatActivity() {
         }
         
         // Prefer label-based resolution over static index to avoid wrong mapping (e.g., id 0 -> Torsk)
-        val primaryLabel = topResults.firstOrNull()
-        var fish = if (primaryLabel != null) FishDatabase.getFishByLabel(primaryLabel) else null
+    val primaryLabel = topResults.firstOrNull()
+    var fish = if (primaryLabel != null) FishDatabase.getFishByLabel(primaryLabel) else null
         if (fish == null && primaryLabel == null) {
             // Fallback only if we have no labels
             fish = FishDatabase.getFishById(fishId)
@@ -76,16 +77,29 @@ class ResultActivity : AppCompatActivity() {
             val characteristicsText = fish!!.characteristics.joinToString("\n") { char -> "• $char" }
             binding.tvCharacteristics.text = characteristicsText
         } else {
-            // No DB match for this label—show the label directly to avoid showing Torsk
-            val display = primaryLabel ?: "Ukjent art"
-            binding.tvFishName.text = display
-            binding.tvScientificName.text = ""
-            binding.tvEnglishName.text = ""
-            binding.tvConfidence.text = "Sikkerhet: ${(confidence * 100).toInt()}%"
-            binding.tvDescription.text = ""
-            binding.tvHabitat.text = ""
-            binding.tvSize.text = ""
-            binding.tvCharacteristics.text = ""
+            // Try metadata.json for label-based details
+            val meta = if (!primaryLabel.isNullOrBlank()) MetadataManager.getByLabel(this, primaryLabel) else null
+            if (meta != null) {
+                binding.tvFishName.text = meta.norwegianName ?: primaryLabel
+                binding.tvScientificName.text = meta.scientificName ?: ""
+                binding.tvEnglishName.text = meta.englishName ?: ""
+                binding.tvConfidence.text = "Sikkerhet: ${(confidence * 100).toInt()}%"
+                binding.tvDescription.text = meta.description ?: ""
+                binding.tvHabitat.text = if (!meta.habitat.isNullOrBlank()) "Habitat: ${meta.habitat}" else ""
+                binding.tvSize.text = if (!meta.averageSize.isNullOrBlank()) "Størrelse: ${meta.averageSize}" else ""
+                binding.tvCharacteristics.text = meta.characteristics.joinToString("\n") { "• $it" }
+            } else {
+                // No DB or metadata match—show the label directly
+                val display = primaryLabel ?: "Ukjent art"
+                binding.tvFishName.text = display
+                binding.tvScientificName.text = ""
+                binding.tvEnglishName.text = ""
+                binding.tvConfidence.text = "Sikkerhet: ${(confidence * 100).toInt()}%"
+                binding.tvDescription.text = ""
+                binding.tvHabitat.text = ""
+                binding.tvSize.text = ""
+                binding.tvCharacteristics.text = ""
+            }
         }
         
         // Display top 3 results

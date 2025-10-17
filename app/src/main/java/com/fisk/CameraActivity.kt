@@ -20,6 +20,7 @@ import androidx.core.content.ContextCompat
 import com.fisk.databinding.ActivityCameraBinding
 import com.fisk.ml.FishClassifier
 import com.fisk.ui.ResultActivity
+import com.fisk.util.ConfigManager
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -233,11 +234,14 @@ class CameraActivity : AppCompatActivity() {
                 if (results.isNotEmpty()) {
                     val top = results[0]
                     val topFlip = resultsFlipped.firstOrNull()
+                    val cfg = ConfigManager.getThresholds(this)
                     // Detect single-class mode by presence of synthetic 'Other'
                     val isSingleClassMode = results.any { it.label.equals("Other", ignoreCase = true) }
+                    // Per-class override threshold if defined
+                    val classThresh = cfg.perClass[top.label] ?: if (isSingleClassMode) cfg.singleClass else cfg.multiClass
                     if (isSingleClassMode) {
-                        val highConf = top.confidence >= 0.98f
-                        val agrees = topFlip != null && topFlip.label == top.label && topFlip.confidence >= 0.98f
+                        val highConf = top.confidence >= classThresh
+                        val agrees = if (cfg.requireFlipAgreement) (topFlip != null && topFlip.label == top.label && topFlip.confidence >= classThresh) else true
                         if (top.label.equals("Other", ignoreCase = true) || !highConf || !agrees) {
                             Toast.makeText(
                                 this,
@@ -247,8 +251,8 @@ class CameraActivity : AppCompatActivity() {
                             return@runOnUiThread
                         }
                     } else {
-                        // Multi-class: relax threshold and don't require flip agreement
-                        if (top.confidence < 0.60f) {
+                        // Multi-class: use configured threshold, no flip agreement needed
+                        if (top.confidence < classThresh) {
                             Toast.makeText(
                                 this,
                                 "Usikker gjenkjenning – prøv igjen med bedre lys/utsnitt",
