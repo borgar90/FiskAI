@@ -7,6 +7,7 @@ from typing import List
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Dropout
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
@@ -42,9 +43,60 @@ def build_datasets(data_root: Path, img_size: int, batch_size: int, val_split: f
 
     # Cache and prefetch for performance
     AUTOTUNE = tf.data.AUTOTUNE
-    train_ds = train_ds.cache().shuffle(1000).prefetch(buffer_size=AUTOTUNE)
-    val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
+    # Apply MobileNetV2 preprocessing to match Android normalization [-1, 1]
+    def _preprocess(x, y):
+        return preprocess_input(x), y
+    train_ds = (
+        train_ds.map(_preprocess, num_parallel_calls=AUTOTUNE)
+        .cache()
+        .shuffle(1000)
+        .prefetch(buffer_size=AUTOTUNE)
+    )
+    val_ds = (
+        val_ds.map(_preprocess, num_parallel_calls=AUTOTUNE)
+        .cache()
+        .prefetch(buffer_size=AUTOTUNE)
+    )
     return train_ds, val_ds
+
+
+def build_datasets_from_dirs(train_dir: Path, val_dir: Path, img_size: int, batch_size: int):
+    # Determine class order from train_dir subfolders
+    class_names = sorted([d.name for d in train_dir.iterdir() if d.is_dir()])
+    if not class_names:
+        raise RuntimeError(f"No class folders found in train dir: {train_dir}")
+
+    # Build datasets with explicit class_names to ensure consistent order
+    train_ds = tf.keras.utils.image_dataset_from_directory(
+        train_dir,
+        image_size=(img_size, img_size),
+        batch_size=batch_size,
+        label_mode="categorical",
+        shuffle=True,
+    )
+    val_ds = tf.keras.utils.image_dataset_from_directory(
+        val_dir,
+        image_size=(img_size, img_size),
+        batch_size=batch_size,
+        label_mode="categorical",
+        shuffle=False,
+    )
+
+    AUTOTUNE = tf.data.AUTOTUNE
+    def _preprocess(x, y):
+        return preprocess_input(x), y
+    train_ds = (
+        train_ds.map(_preprocess, num_parallel_calls=AUTOTUNE)
+        .cache()
+        .shuffle(1000)
+        .prefetch(buffer_size=AUTOTUNE)
+    )
+    val_ds = (
+        val_ds.map(_preprocess, num_parallel_calls=AUTOTUNE)
+        .cache()
+        .prefetch(buffer_size=AUTOTUNE)
+    )
+    return train_ds, val_ds, class_names
 
 
 def build_model(num_classes: int, img_size: int):
@@ -55,7 +107,11 @@ def build_model(num_classes: int, img_size: int):
     x = GlobalAveragePooling2D()(x)
     x = Dense(256, activation="relu")(x)
     x = Dropout(0.4)(x)
-    outputs = Dense(num_classes, activation="softmax", name="predictions")(x)
+    if num_classes == 1:
+        # Binary classification (e.g., Salmon vs not)
+        outputs = Dense(1, activation="sigmoid", name="predictions")(x)
+    else:
+        outputs = Dense(num_classes, activation="softmax", name="predictions")(x)
     model = Model(inputs=base.input, outputs=outputs)
     return model, base
 
@@ -63,20 +119,17 @@ def build_model(num_classes: int, img_size: int):
 def to_tflite(model: tf.keras.Model, out_path: Path):
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
-    try:
-        converter.target_spec.supported_ops = [
-            tf.lite.OpsSet.TFLITE_BUILTINS_INT8,
-            tf.lite.OpsSet.TFLITE_BUILTINS,
-        ]
-    except Exception:
-        pass
+    # Avoid forcing full integer quantization (INT8) unless a representative dataset is provided.
+    # Leaving only Optimize.DEFAULT will produce a float or dynamically quantized model without calibration.
     tflite_model = converter.convert()
     out_path.write_bytes(tflite_model)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Train fish classifier and export TFLite model")
-    parser.add_argument("--data_dir", type=str, required=True, help="Path to dataset root. Expect class subfolders.")
+    parser.add_argument("--data_dir", type=str, required=False, help="Path to dataset root. Expect class subfolders.")
+    parser.add_argument("--train_dir", type=str, required=False, help="Path to training dataset root (class subfolders)")
+    parser.add_argument("--val_dir", type=str, required=False, help="Path to validation dataset root (class subfolders)")
     parser.add_argument("--output_dir", type=str, default="models", help="Directory to write outputs")
     parser.add_argument("--img_size", type=int, default=224)
     parser.add_argument("--batch_size", type=int, default=32)
@@ -85,11 +138,21 @@ def main():
     parser.add_argument("--fine_tune_layers", type=int, default=30, help="Unfreeze last N layers for fine-tuning")
     args = parser.parse_args()
 
-    data_dir = Path(args.data_dir)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    class_names: List[str]
+    
+    if args.train_dir and args.val_dir:
+        train_dir = Path(args.train_dir)
+        val_dir = Path(args.val_dir)
+        train_ds, val_ds, class_names = build_datasets_from_dirs(train_dir, val_dir, args.img_size, args.batch_size)
+    elif args.data_dir:
+        data_dir = Path(args.data_dir)
+        class_names = find_classes(data_dir)
+        train_ds, val_ds = build_datasets(data_dir, args.img_size, args.batch_size, args.val_split)
+    else:
+        raise SystemExit("Provide either --data_dir or both --train_dir and --val_dir")
 
-    class_names = find_classes(data_dir)
     num_classes = len(class_names)
     print(f"Found {num_classes} classes: {class_names}")
 
@@ -97,10 +160,9 @@ def main():
     labels_txt = output_dir / "labels.txt"
     labels_txt.write_text("\n".join(class_names), encoding="utf-8")
 
-    train_ds, val_ds = build_datasets(data_dir, args.img_size, args.batch_size, args.val_split)
-
     model, base = build_model(num_classes, args.img_size)
-    model.compile(optimizer=Adam(learning_rate=1e-3), loss="categorical_crossentropy", metrics=["accuracy"]) 
+    loss = "binary_crossentropy" if num_classes == 1 else "categorical_crossentropy"
+    model.compile(optimizer=Adam(learning_rate=1e-3), loss=loss, metrics=["accuracy"]) 
 
     callbacks = [
         tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=5, restore_best_weights=True),
@@ -114,7 +176,7 @@ def main():
     base.trainable = True
     for layer in base.layers[:-args.fine_tune_layers]:
         layer.trainable = False
-    model.compile(optimizer=Adam(learning_rate=1e-4), loss="categorical_crossentropy", metrics=["accuracy"]) 
+    model.compile(optimizer=Adam(learning_rate=1e-4), loss=loss, metrics=["accuracy"]) 
     model.fit(train_ds, validation_data=val_ds, epochs=max(3, args.epochs // 2), callbacks=callbacks)
 
     # Export to TFLite and Keras format
