@@ -139,7 +139,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textSize="15sp"
-                    android:lineSpacing Extra="4dp"
+                    android:lineSpacingExtra="4dp"
                     android:textColor="@color/text_primary"
                     tools:text="En av de viktigste kommersielle fiskene i Norge." />
 
