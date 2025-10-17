@@ -25,7 +25,6 @@ class FishClassifier(private val context: Context) {
         private const val LABELS_FILE = "labels.txt"
         private const val INPUT_SIZE = 224
         private const val NUM_CHANNELS = 3
-        private const val NUM_CLASSES = 10
     }
     
     init {
@@ -104,7 +103,8 @@ class FishClassifier(private val context: Context) {
         val inputBuffer = bitmapToByteBuffer(processedBitmap)
         
         // Run inference
-        val output = Array(1) { FloatArray(NUM_CLASSES) }
+        val numClasses = getNumClasses()
+        val output = Array(1) { FloatArray(numClasses) }
         interpreter?.run(inputBuffer, output)
         
         // Process results
@@ -142,7 +142,7 @@ class FishClassifier(private val context: Context) {
         val classifications = mutableListOf<Classification>()
         
         for (i in output.indices) {
-            val label = if (i < labels.size) labels[i] else "Unknown"
+            val label = if (i < labels.size) labels[i] else "Class $i"
             classifications.add(
                 Classification(
                     label = label,
@@ -156,6 +156,29 @@ class FishClassifier(private val context: Context) {
         return classifications
             .sortedByDescending { it.confidence }
             .take(3)
+    }
+
+    /**
+     * Determine number of classes from model's output tensor if possible,
+     * otherwise fall back to labels count, then a safe default of 1.
+     */
+    private fun getNumClasses(): Int {
+        // Try to read output tensor shape: usually [1, numClasses]
+        try {
+            val outShape = interpreter?.getOutputTensor(0)?.shape()
+            if (outShape != null && outShape.isNotEmpty()) {
+                val lastDim = outShape.last()
+                if (lastDim > 0) return lastDim
+            }
+        } catch (_: Throwable) {
+            // Some older TF Lite versions on Android may not expose tensor metadata
+        }
+
+        // Fallback to labels size if available
+        if (labels.isNotEmpty()) return labels.size
+
+        // Final fallback
+        return 1
     }
     
     /**

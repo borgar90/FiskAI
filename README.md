@@ -114,6 +114,21 @@ To train your own fish classification model:
 3. Convert to TensorFlow Lite format
 4. Replace `fish_model.tflite` in assets folder
 
+Quick path using the built-in training script (Windows):
+
+1. Prepare a folder like `D:\data\fish\dataset\Laks\...` (or multiple class folders)
+2. Open PowerShell and run:
+
+```powershell
+cd D:\dev\fisk
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r training\requirements.txt
+python training\train.py --data_dir D:\data\fish\dataset --output_dir training\outputs --epochs 12
+copy training\outputs\fish_model.tflite app\src\main\assets\fish_model.tflite
+copy training\outputs\labels.txt app\src\main\assets\labels.txt
+```
+
 ## Usage
 
 1. Launch the app
