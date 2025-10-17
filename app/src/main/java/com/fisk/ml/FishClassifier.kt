@@ -23,9 +23,11 @@ class FishClassifier(private val context: Context) {
     
     companion object {
         // Try these model files in order; first one found will be used
+        // Prefer the multi-class model by default
         private val MODEL_CANDIDATES = listOf(
-            "salmon_model.tflite",
-            "fish_model.tflite"
+            "fish_model.tflite",
+            "model.tflite",
+            "salmon_model.tflite"
         )
         private const val LABELS_FILE = "labels.txt"
         private const val INPUT_SIZE = 224
