@@ -4,6 +4,9 @@
     "singleClass": 0.98
   },
   "requireFlipAgreement": true,
+  "minBrightness": 0.18,
+  "minSharpness": 3.0,
+  "minMargin": 0.15,
   "perClassThresholds": {
     "Red-snapper": 0.70,
     "salmon": 0.60

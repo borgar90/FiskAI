@@ -7,6 +7,9 @@ data class ThresholdConfig(
     val multiClass: Float = 0.6f,
     val singleClass: Float = 0.98f,
     val requireFlipAgreement: Boolean = true,
+    val minBrightness: Float = 0.15f,
+    val minSharpness: Float = 0.08f,
+    val minMargin: Float = 0.15f,
     val perClass: Map<String, Float> = emptyMap()
 )
 
@@ -22,6 +25,9 @@ object ConfigManager {
             val multi = th?.optDouble("multiClass", 0.6)?.toFloat() ?: 0.6f
             val single = th?.optDouble("singleClass", 0.98)?.toFloat() ?: 0.98f
             val requireFlip = root.optBoolean("requireFlipAgreement", true)
+            val minBrightness = root.optDouble("minBrightness", 0.15).toFloat()
+            val minSharpness = root.optDouble("minSharpness", 0.08).toFloat()
+            val minMargin = root.optDouble("minMargin", 0.15).toFloat()
             val pct = root.optJSONObject("perClassThresholds")
             val map = mutableMapOf<String, Float>()
             if (pct != null) {
@@ -34,7 +40,15 @@ object ConfigManager {
                     }
                 }
             }
-            ThresholdConfig(multiClass = multi, singleClass = single, requireFlipAgreement = requireFlip, perClass = map).also {
+            ThresholdConfig(
+                multiClass = multi,
+                singleClass = single,
+                requireFlipAgreement = requireFlip,
+                minBrightness = minBrightness,
+                minSharpness = minSharpness,
+                minMargin = minMargin,
+                perClass = map
+            ).also {
                 cached = it
             }
         } catch (_: Throwable) {

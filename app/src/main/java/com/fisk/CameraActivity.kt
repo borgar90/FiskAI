@@ -19,6 +19,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import com.fisk.databinding.ActivityCameraBinding
 import com.fisk.ml.FishClassifier
+import com.fisk.ml.ImageProcessor
 import com.fisk.ui.ResultActivity
 import com.fisk.util.ConfigManager
 import java.io.ByteArrayOutputStream
@@ -143,6 +144,18 @@ class CameraActivity : AppCompatActivity() {
                     val path = photoFile.absolutePath
                     val bitmap = BitmapFactory.decodeFile(path)
                     if (bitmap != null) {
+                        // Quick quality checks before classification
+                        val cfg = ConfigManager.getThresholds(this@CameraActivity)
+                        val brightness = ImageProcessor.estimateBrightness(bitmap)
+                        val sharpness = ImageProcessor.estimateSharpness(bitmap)
+                        if (brightness < cfg.minBrightness) {
+                            Toast.makeText(this@CameraActivity, "For mørkt bilde – øk lys eller bruk blits", Toast.LENGTH_SHORT).show()
+                            return
+                        }
+                        if (sharpness < cfg.minSharpness) {
+                            Toast.makeText(this@CameraActivity, "Uskarpt bilde – stabiliser kamera og prøv igjen", Toast.LENGTH_SHORT).show()
+                            return
+                        }
                         classifyAndShowResult(bitmap, existingImagePath = path)
                     } else {
                         Toast.makeText(
