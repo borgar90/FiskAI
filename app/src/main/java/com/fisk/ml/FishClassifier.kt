@@ -126,10 +126,18 @@ class FishClassifier(private val context: Context) {
         // Run inference
         val numClasses = getNumClasses()
         val output = Array(1) { FloatArray(numClasses) }
+        inputBuffer.rewind()
         interpreter?.run(inputBuffer, output)
         
         // Process results
-        return processOutput(output[0])
+        val results = processOutput(output[0])
+        try {
+            android.util.Log.d(
+                "FishClassifier",
+                "Top results: " + results.joinToString { "${it.label}:${"%.2f".format(it.confidence)}" }
+            )
+        } catch (_: Throwable) {}
+        return results
     }
     
     /**
