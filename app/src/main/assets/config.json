@@ -1,11 +1,11 @@
 {
   "thresholds": {
-    "multiClass": 1.0,
+    "multiClass": 0.65,
     "singleClass": 0.98
   },
   "requireFlipAgreement": true,
   "perClassThresholds": {
-    "Red-snapper": 1.0,
-    "salmon": 1.0
+    "Red-snapper": 0.70,
+    "salmon": 0.60
   }
 }
