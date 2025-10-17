@@ -6,6 +6,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.os.Bundle
 import android.util.Log
+import java.io.File
+import java.io.FileOutputStream
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
@@ -155,12 +157,25 @@ class CameraActivity : AppCompatActivity() {
         
         // Run classification in background
         cameraExecutor.execute {
-            val results = fishClassifier.classifyImage(bitmap)
+            val results = try {
+                fishClassifier.classifyImage(bitmap)
+            } catch (t: Throwable) {
+                Log.e(TAG, "Classification error", t)
+                emptyList()
+            }
             
-            // Convert bitmap to byte array for passing to next activity
-            val stream = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, stream)
-            val imageBytes = stream.toByteArray()
+            // Save image to a temporary cache file instead of passing large byte arrays
+            val imagePath: String? = try {
+                val file = File(cacheDir, "captured_${System.currentTimeMillis()}.jpg")
+                FileOutputStream(file).use { fos ->
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 85, fos)
+                    fos.flush()
+                }
+                file.absolutePath
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to save captured image", t)
+                null
+            }
             
             runOnUiThread {
                 binding.btnCapture.isEnabled = true
@@ -168,7 +183,7 @@ class CameraActivity : AppCompatActivity() {
                 
                 if (results.isNotEmpty()) {
                     val intent = Intent(this, ResultActivity::class.java).apply {
-                        putExtra("image", imageBytes)
+                        imagePath?.let { putExtra("imagePath", it) }
                         putExtra("fishId", results[0].fishId)
                         putExtra("confidence", results[0].confidence)
                         putExtra("topResults", ArrayList(results.map { it.label }))

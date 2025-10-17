@@ -1,6 +1,8 @@
 package com.fisk.ui
 
 import android.graphics.BitmapFactory
+import android.util.Log
+import java.io.File
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import com.fisk.data.FishDatabase
@@ -32,15 +34,25 @@ class ResultActivity : AppCompatActivity() {
     private fun displayResults() {
         // Get data from intent
         val imageBytes = intent.getByteArrayExtra("image")
+        val imagePath = intent.getStringExtra("imagePath")
         val fishId = intent.getIntExtra("fishId", 0)
         val confidence = intent.getFloatExtra("confidence", 0f)
         val topResults = intent.getStringArrayListExtra("topResults") ?: arrayListOf()
         val topConfidences = intent.getFloatArrayExtra("topConfidences") ?: floatArrayOf()
         
         // Display image
-        imageBytes?.let {
-            val bitmap = BitmapFactory.decodeByteArray(it, 0, it.size)
-            binding.ivCapturedFish.setImageBitmap(bitmap)
+        if (!imagePath.isNullOrEmpty()) {
+            try {
+                val bitmap = BitmapFactory.decodeFile(imagePath)
+                binding.ivCapturedFish.setImageBitmap(bitmap)
+            } catch (t: Throwable) {
+                Log.e("ResultActivity", "Failed to decode image from path", t)
+            }
+        } else {
+            imageBytes?.let {
+                val bitmap = BitmapFactory.decodeByteArray(it, 0, it.size)
+                binding.ivCapturedFish.setImageBitmap(bitmap)
+            }
         }
         
         // Get fish data
