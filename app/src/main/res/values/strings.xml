@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Fisk</string>
+    <string name="subtitle">Identifiser fisk i norske farvann</string>
+    <string name="start_camera">Start Kamera</string>
+    <string name="about">Om Appen</string>
+    <string name="back">Tilbake</string>
+    <string name="flash">Blits</string>
+    <string name="camera_hint">Rett kameraet mot fisken og ta bilde</string>
+    <string name="capture">Ta Bilde</string>
+    <string name="result">Resultat</string>
+    <string name="captured_fish">Fanget fisk</string>
+    <string name="characteristics">Kjennetegn</string>
+    <string name="new_photo">Ta Nytt Bilde</string>
+    <string name="app_logo">App logo</string>
+</resources>
