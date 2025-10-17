@@ -183,12 +183,10 @@ class CameraActivity : AppCompatActivity() {
         
         // Run classification in background
         cameraExecutor.execute {
-            val results = try {
-                fishClassifier.classifyImage(bitmap)
-            } catch (t: Throwable) {
-                Log.e(TAG, "Classification error", t)
-                emptyList()
-            }
+            val results = try { fishClassifier.classifyImage(bitmap) } catch (t: Throwable) { Log.e(TAG, "Classification error", t); emptyList() }
+            // Second pass: flipped image for robustness in single-class scenarios
+            val flipped = flipHorizontal(bitmap)
+            val resultsFlipped = try { fishClassifier.classifyImage(flipped) } catch (_: Throwable) { emptyList() }
             
             // Reuse existing saved file path if provided; otherwise save a new copy
             val imagePath: String? = existingImagePath ?: try {
@@ -209,8 +207,13 @@ class CameraActivity : AppCompatActivity() {
                 
                 if (results.isNotEmpty()) {
                     val top = results[0]
+                    val topFlip = resultsFlipped.firstOrNull()
                     // For single-class models we synthesize an "Other" class; avoid false positive navigation
-                    if (top.label.equals("Other", ignoreCase = true) || top.confidence < 0.85f) {
+                    val isOther = top.label.equals("Other", ignoreCase = true)
+                    val highConf = top.confidence >= 0.98f
+                    // Require agreement on flipped image as well when single-class likely
+                    val agrees = topFlip != null && topFlip.label == top.label && topFlip.confidence >= 0.98f
+                    if (isOther || !highConf || !agrees) {
                         Toast.makeText(
                             this,
                             "Usikker gjenkjenning – prøv igjen med bedre lys/utsnitt",
@@ -235,6 +238,12 @@ class CameraActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun flipHorizontal(src: Bitmap): Bitmap {
+        val m = Matrix()
+        m.preScale(-1f, 1f)
+        return Bitmap.createBitmap(src, 0, 0, src.width, src.height, m, true)
     }
     
     private fun toggleFlash() {
