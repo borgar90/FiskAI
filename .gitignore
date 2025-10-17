@@ -141,10 +141,42 @@ dist/
 *.ckpt
 saved_model/
 
-# Training data (add via Git LFS if needed)
+# Training data (do NOT commit datasets)
 dataset/
+datasets/
 data/
+data_raw/
+data-raw/
+data_processed/
+data-processed/
+!training/README.md
+!training/**/*.md
 *.tfrecord
+*.record
+*.csv
+*.parquet
+*.feather
+*.npy
+*.npz
+*.zip
+*.tar
+*.tar.gz
+*.7z
+*.rar
+
+# Common media that might be part of datasets
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.gif
+*.webp
+*.tif
+*.tiff
+*.mp4
+*.mov
+*.avi
+*.mkv
 
 # Backup files
 *.bak
