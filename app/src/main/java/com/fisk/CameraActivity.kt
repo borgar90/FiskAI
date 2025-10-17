@@ -104,16 +104,20 @@ class CameraActivity : AppCompatActivity() {
     
     private fun takePhoto() {
         val imageCapture = imageCapture ?: return
-        
+
+        // Capture directly to a file to avoid fragile YUV conversions
+        val photoFile = File(cacheDir, "capture_${System.currentTimeMillis()}.jpg")
+        val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
+
         imageCapture.takePicture(
+            outputOptions,
             ContextCompat.getMainExecutor(this),
-            object : ImageCapture.OnImageCapturedCallback() {
-                override fun onCaptureSuccess(image: ImageProxy) {
-                    val bitmap = imageProxyToBitmap(image)
-                    image.close()
-                    
+            object : ImageCapture.OnImageSavedCallback {
+                override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                    val path = photoFile.absolutePath
+                    val bitmap = BitmapFactory.decodeFile(path)
                     if (bitmap != null) {
-                        classifyAndShowResult(bitmap)
+                        classifyAndShowResult(bitmap, existingImagePath = path)
                     } else {
                         Toast.makeText(
                             this@CameraActivity,
@@ -122,9 +126,9 @@ class CameraActivity : AppCompatActivity() {
                         ).show()
                     }
                 }
-                
+
                 override fun onError(exception: ImageCaptureException) {
-                    Log.e(TAG, "Photo capture failed: ${exception.message}", exception)
+                    Log.e(TAG, "Photo file save failed: ${exception.message}", exception)
                     Toast.makeText(
                         this@CameraActivity,
                         "Feil ved bildeopptak",
@@ -172,7 +176,7 @@ class CameraActivity : AppCompatActivity() {
         return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
     
-    private fun classifyAndShowResult(bitmap: Bitmap) {
+    private fun classifyAndShowResult(bitmap: Bitmap, existingImagePath: String? = null) {
         // Show loading indicator
         binding.btnCapture.isEnabled = false
         binding.btnCapture.text = "Analyserer..."
@@ -186,8 +190,8 @@ class CameraActivity : AppCompatActivity() {
                 emptyList()
             }
             
-            // Save image to a temporary cache file instead of passing large byte arrays
-            val imagePath: String? = try {
+            // Reuse existing saved file path if provided; otherwise save a new copy
+            val imagePath: String? = existingImagePath ?: try {
                 val file = File(cacheDir, "captured_${System.currentTimeMillis()}.jpg")
                 FileOutputStream(file).use { fos ->
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 85, fos)
