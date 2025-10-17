@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import org.tensorflow.lite.Interpreter
 import java.io.FileInputStream
+import java.io.FileNotFoundException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.MappedByteBuffer
@@ -21,7 +22,11 @@ class FishClassifier(private val context: Context) {
     private val labels = mutableListOf<String>()
     
     companion object {
-        private const val MODEL_FILE = "fish_model.tflite"
+        // Try these model files in order; first one found will be used
+        private val MODEL_CANDIDATES = listOf(
+            "salmon_model.tflite",
+            "fish_model.tflite"
+        )
         private const val LABELS_FILE = "labels.txt"
         private const val INPUT_SIZE = 224
         private const val NUM_CHANNELS = 3
@@ -54,12 +59,23 @@ class FishClassifier(private val context: Context) {
      * Load model file from assets
      */
     private fun loadModelFile(): MappedByteBuffer {
-        val fileDescriptor = context.assets.openFd(MODEL_FILE)
-        val inputStream = FileInputStream(fileDescriptor.fileDescriptor)
-        val fileChannel = inputStream.channel
-        val startOffset = fileDescriptor.startOffset
-        val declaredLength = fileDescriptor.declaredLength
-        return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
+        val assetManager = context.assets
+        // Iterate through candidate model names and return the first that exists
+        for (name in MODEL_CANDIDATES) {
+            try {
+                val fileDescriptor = assetManager.openFd(name)
+                val inputStream = FileInputStream(fileDescriptor.fileDescriptor)
+                val fileChannel = inputStream.channel
+                val startOffset = fileDescriptor.startOffset
+                val declaredLength = fileDescriptor.declaredLength
+                return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
+            } catch (_: Exception) {
+                // Try next candidate
+            }
+        }
+        throw FileNotFoundException(
+            "No model file found in assets. Looked for: " + MODEL_CANDIDATES.joinToString(", ")
+        )
     }
     
     /**
@@ -84,7 +100,8 @@ class FishClassifier(private val context: Context) {
                     "Sild",
                     "Rødspette",
                     "Kveite",
-                    "Abbor"
+                    "Abbor",
+                    "Salmon"
                 )
             )
         }
