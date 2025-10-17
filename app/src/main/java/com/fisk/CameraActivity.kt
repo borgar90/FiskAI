@@ -3,6 +3,8 @@ package com.fisk
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ImageFormat
+import android.graphics.Rect
 import android.graphics.Matrix
 import android.os.Bundle
 import android.util.Log
@@ -134,14 +136,34 @@ class CameraActivity : AppCompatActivity() {
     }
     
     private fun imageProxyToBitmap(image: ImageProxy): Bitmap? {
-        val buffer = image.planes[0].buffer
-        val bytes = ByteArray(buffer.remaining())
-        buffer.get(bytes)
-        
-        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-        
-        // Rotate bitmap if needed
-        return rotateBitmap(bitmap, image.imageInfo.rotationDegrees.toFloat())
+        return try {
+            // Convert YUV_420_888 to NV21
+            val yBuffer = image.planes[0].buffer
+            val uBuffer = image.planes[1].buffer
+            val vBuffer = image.planes[2].buffer
+
+            val ySize = yBuffer.remaining()
+            val uSize = uBuffer.remaining()
+            val vSize = vBuffer.remaining()
+
+            val nv21 = ByteArray(ySize + uSize + vSize)
+            yBuffer.get(nv21, 0, ySize)
+            vBuffer.get(nv21, ySize, vSize)
+            uBuffer.get(nv21, ySize + vSize, uSize)
+
+            // Create JPEG from NV21
+            val yuvImage = android.graphics.YuvImage(nv21, ImageFormat.NV21, image.width, image.height, null)
+            val out = ByteArrayOutputStream()
+            yuvImage.compressToJpeg(Rect(0, 0, image.width, image.height), 90, out)
+            val imageBytes = out.toByteArray()
+
+            var bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+            bitmap = rotateBitmap(bitmap, image.imageInfo.rotationDegrees.toFloat())
+            bitmap
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to convert ImageProxy to Bitmap", t)
+            null
+        }
     }
     
     private fun rotateBitmap(bitmap: Bitmap, degrees: Float): Bitmap {
@@ -182,6 +204,16 @@ class CameraActivity : AppCompatActivity() {
                 binding.btnCapture.text = "Ta Bilde"
                 
                 if (results.isNotEmpty()) {
+                    val top = results[0]
+                    // For single-class models we synthesize an "Other" class; avoid false positive navigation
+                    if (top.label.equals("Other", ignoreCase = true) || top.confidence < 0.85f) {
+                        Toast.makeText(
+                            this,
+                            "Usikker gjenkjenning – prøv igjen med bedre lys/utsnitt",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        return@runOnUiThread
+                    }
                     val intent = Intent(this, ResultActivity::class.java).apply {
                         imagePath?.let { putExtra("imagePath", it) }
                         putExtra("fishId", results[0].fishId)
