@@ -49,6 +49,7 @@ class FishClassifier(private val context: Context) {
                 // addDelegate(GpuDelegate())
             }
             interpreter = Interpreter(modelFile, options)
+            android.util.Log.d("FishClassifier", "Model loaded. Candidates: ${MODEL_CANDIDATES.joinToString()}; output classes: ${getNumClasses()}")
         } catch (e: Exception) {
             e.printStackTrace()
             // Model file might not exist yet - this is expected for initial setup
@@ -68,6 +69,7 @@ class FishClassifier(private val context: Context) {
                 val fileChannel = inputStream.channel
                 val startOffset = fileDescriptor.startOffset
                 val declaredLength = fileDescriptor.declaredLength
+                android.util.Log.d("FishClassifier", "Using model file: $name")
                 return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
             } catch (_: Exception) {
                 // Try next candidate
@@ -157,18 +159,39 @@ class FishClassifier(private val context: Context) {
      */
     private fun processOutput(output: FloatArray): List<Classification> {
         val classifications = mutableListOf<Classification>()
-        
-        for (i in output.indices) {
-            val label = if (i < labels.size) labels[i] else "Class $i"
+
+        // Special handling: single-output model (binary presence of one class)
+        if (output.size == 1) {
+            val p = output[0].coerceIn(0f, 1f)
+            val mainLabel = if (labels.isNotEmpty()) labels[0] else "Class 0"
             classifications.add(
                 Classification(
-                    label = label,
-                    confidence = output[i],
-                    fishId = i
+                    label = mainLabel,
+                    confidence = p,
+                    fishId = 0
                 )
             )
+            classifications.add(
+                Classification(
+                    label = "Other",
+                    confidence = (1f - p).coerceIn(0f, 1f),
+                    fishId = 1
+                )
+            )
+        } else {
+            // Multi-class softmax output
+            for (i in output.indices) {
+                val label = if (i < labels.size) labels[i] else "Class $i"
+                classifications.add(
+                    Classification(
+                        label = label,
+                        confidence = output[i],
+                        fishId = i
+                    )
+                )
+            }
         }
-        
+
         // Sort by confidence (descending) and return top 3
         return classifications
             .sortedByDescending { it.confidence }

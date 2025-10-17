@@ -35,9 +35,9 @@ class ResultActivity : AppCompatActivity() {
         // Get data from intent
         val imageBytes = intent.getByteArrayExtra("image")
         val imagePath = intent.getStringExtra("imagePath")
-        val fishId = intent.getIntExtra("fishId", 0)
+    val fishId = intent.getIntExtra("fishId", 0)
         val confidence = intent.getFloatExtra("confidence", 0f)
-        val topResults = intent.getStringArrayListExtra("topResults") ?: arrayListOf()
+    val topResults = intent.getStringArrayListExtra("topResults") ?: arrayListOf()
         val topConfidences = intent.getFloatArrayExtra("topConfidences") ?: floatArrayOf()
         
         // Display image
@@ -55,8 +55,13 @@ class ResultActivity : AppCompatActivity() {
             }
         }
         
-        // Get fish data
-        val fish = FishDatabase.getFishById(fishId)
+        // Get fish data: prefer label-based resolution over static index
+        var fish = FishDatabase.getFishById(fishId)
+        if ((fish == null || fish.norwegianName.equals("Torsk", true)) && topResults.isNotEmpty()) {
+            FishDatabase.getFishByLabel(topResults.first())?.let { resolved ->
+                fish = resolved
+            }
+        }
         
         fish?.let {
             binding.tvFishName.text = it.norwegianName
