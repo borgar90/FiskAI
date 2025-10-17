@@ -35,9 +35,9 @@ class ResultActivity : AppCompatActivity() {
         // Get data from intent
         val imageBytes = intent.getByteArrayExtra("image")
         val imagePath = intent.getStringExtra("imagePath")
-    val fishId = intent.getIntExtra("fishId", 0)
+        val fishId = intent.getIntExtra("fishId", 0)
         val confidence = intent.getFloatExtra("confidence", 0f)
-    val topResults = intent.getStringArrayListExtra("topResults") ?: arrayListOf()
+        val topResults = intent.getStringArrayListExtra("topResults") ?: arrayListOf()
         val topConfidences = intent.getFloatArrayExtra("topConfidences") ?: floatArrayOf()
         
         // Display image
@@ -55,29 +55,37 @@ class ResultActivity : AppCompatActivity() {
             }
         }
         
-        // Get fish data: prefer label-based resolution over static index
-        var fish = FishDatabase.getFishById(fishId)
-        if ((fish == null || fish.norwegianName.equals("Torsk", true)) && topResults.isNotEmpty()) {
-            FishDatabase.getFishByLabel(topResults.first())?.let { resolved ->
-                fish = resolved
-            }
+        // Prefer label-based resolution over static index to avoid wrong mapping (e.g., id 0 -> Torsk)
+        val primaryLabel = topResults.firstOrNull()
+        var fish = if (primaryLabel != null) FishDatabase.getFishByLabel(primaryLabel) else null
+        if (fish == null && primaryLabel == null) {
+            // Fallback only if we have no labels
+            fish = FishDatabase.getFishById(fishId)
         }
-        
-        fish?.let {
-            binding.tvFishName.text = it.norwegianName
-            binding.tvScientificName.text = it.scientificName
-            binding.tvEnglishName.text = it.englishName
+
+        if (fish != null) {
+            binding.tvFishName.text = fish!!.norwegianName
+            binding.tvScientificName.text = fish!!.scientificName
+            binding.tvEnglishName.text = fish!!.englishName
             binding.tvConfidence.text = "Sikkerhet: ${(confidence * 100).toInt()}%"
-            
-            binding.tvDescription.text = it.description
-            binding.tvHabitat.text = "Habitat: ${it.habitat}"
-            binding.tvSize.text = "Størrelse: ${it.averageSize}"
-            
-            // Display characteristics
-            val characteristicsText = it.characteristics.joinToString("\n") { char ->
-                "• $char"
-            }
+
+            binding.tvDescription.text = fish!!.description
+            binding.tvHabitat.text = "Habitat: ${fish!!.habitat}"
+            binding.tvSize.text = "Størrelse: ${fish!!.averageSize}"
+
+            val characteristicsText = fish!!.characteristics.joinToString("\n") { char -> "• $char" }
             binding.tvCharacteristics.text = characteristicsText
+        } else {
+            // No DB match for this label—show the label directly to avoid showing Torsk
+            val display = primaryLabel ?: "Ukjent art"
+            binding.tvFishName.text = display
+            binding.tvScientificName.text = ""
+            binding.tvEnglishName.text = ""
+            binding.tvConfidence.text = "Sikkerhet: ${(confidence * 100).toInt()}%"
+            binding.tvDescription.text = ""
+            binding.tvHabitat.text = ""
+            binding.tvSize.text = ""
+            binding.tvCharacteristics.text = ""
         }
         
         // Display top 3 results

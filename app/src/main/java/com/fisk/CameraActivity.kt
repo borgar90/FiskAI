@@ -11,6 +11,8 @@ import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
 import android.widget.Toast
+import android.view.ScaleGestureDetector
+import android.view.MotionEvent
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -30,6 +32,7 @@ class CameraActivity : AppCompatActivity() {
     
     private var imageCapture: ImageCapture? = null
     private var camera: Camera? = null
+    private lateinit var scaleGestureDetector: ScaleGestureDetector
     
     companion object {
         private const val TAG = "CameraActivity"
@@ -45,6 +48,7 @@ class CameraActivity : AppCompatActivity() {
         
         startCamera()
         setupUI()
+        setupZoomGesture()
     }
     
     private fun setupUI() {
@@ -58,6 +62,27 @@ class CameraActivity : AppCompatActivity() {
         
         binding.btnBack.setOnClickListener {
             finish()
+        }
+    }
+
+    private fun setupZoomGesture() {
+        scaleGestureDetector = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                val camera = camera ?: return false
+                val currentZoom = camera.cameraInfo.zoomState.value?.zoomRatio ?: 1f
+                val scaleFactor = detector.scaleFactor
+                val newZoom = (currentZoom * scaleFactor).coerceIn(
+                    camera.cameraInfo.zoomState.value?.minZoomRatio ?: 1f,
+                    camera.cameraInfo.zoomState.value?.maxZoomRatio ?: 10f
+                )
+                camera.cameraControl.setZoomRatio(newZoom)
+                return true
+            }
+        })
+
+        binding.viewFinder.setOnTouchListener { _, event: MotionEvent ->
+            scaleGestureDetector.onTouchEvent(event)
+            true
         }
     }
     
@@ -208,18 +233,29 @@ class CameraActivity : AppCompatActivity() {
                 if (results.isNotEmpty()) {
                     val top = results[0]
                     val topFlip = resultsFlipped.firstOrNull()
-                    // For single-class models we synthesize an "Other" class; avoid false positive navigation
-                    val isOther = top.label.equals("Other", ignoreCase = true)
-                    val highConf = top.confidence >= 0.98f
-                    // Require agreement on flipped image as well when single-class likely
-                    val agrees = topFlip != null && topFlip.label == top.label && topFlip.confidence >= 0.98f
-                    if (isOther || !highConf || !agrees) {
-                        Toast.makeText(
-                            this,
-                            "Usikker gjenkjenning – prøv igjen med bedre lys/utsnitt",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                        return@runOnUiThread
+                    // Detect single-class mode by presence of synthetic 'Other'
+                    val isSingleClassMode = results.any { it.label.equals("Other", ignoreCase = true) }
+                    if (isSingleClassMode) {
+                        val highConf = top.confidence >= 0.98f
+                        val agrees = topFlip != null && topFlip.label == top.label && topFlip.confidence >= 0.98f
+                        if (top.label.equals("Other", ignoreCase = true) || !highConf || !agrees) {
+                            Toast.makeText(
+                                this,
+                                "Usikker gjenkjenning – prøv igjen med bedre lys/utsnitt",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            return@runOnUiThread
+                        }
+                    } else {
+                        // Multi-class: relax threshold and don't require flip agreement
+                        if (top.confidence < 0.60f) {
+                            Toast.makeText(
+                                this,
+                                "Usikker gjenkjenning – prøv igjen med bedre lys/utsnitt",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            return@runOnUiThread
+                        }
                     }
                     val intent = Intent(this, ResultActivity::class.java).apply {
                         imagePath?.let { putExtra("imagePath", it) }
